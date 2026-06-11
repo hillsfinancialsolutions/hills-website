@@ -325,7 +325,7 @@ tr:hover td{background:var(--bg4)}
   <!-- Firebase SDK -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    import { getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc, onSnapshot, orderBy, query } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyD8W6bDITfmUisUm7eCochLZsguzswtiDc",
@@ -347,6 +347,8 @@ tr:hover td{background:var(--bg4)}
     window._getDoc = getDoc;
     window._getDocs = getDocs;
     window._deleteDoc = deleteDoc;
+    window._orderBy = orderBy;
+    window._query = query;
 
     console.log("✅ Firebase connected — hills-financial-crm");
     // Signal app that firebase is ready
@@ -363,11 +365,11 @@ tr:hover td{background:var(--bg4)}
       <h1>Hills Financial Solutions</h1>
       <p>CRM Admin Portal — Secure Login</p>
     </div>
-    <div id="loginErr" class="login-err">Incorrect credentials. Try admin / hills2024</div>
+    <div id="loginErr" class="login-err">Incorrect username or password.</div>
     <div class="login-field"><label>Username</label><input id="lUser" type="text" placeholder="admin" autocomplete="username"></div>
     <div class="login-field"><label>Password</label><input id="lPass" type="password" placeholder="••••••••" autocomplete="current-password"></div>
     <button class="login-btn" onclick="doLogin()">Sign In →</button>
-    <p class="login-hint">Demo: admin / hills2024</p>
+    <p class="login-hint">Hills Financial Solutions — Admin Access</p>
   </div>
 </div>
 
@@ -400,6 +402,7 @@ tr:hover td{background:var(--bg4)}
       <div class="sb-item" onclick="nav('reminders',this)"><i class="ti ti-bell"></i>Reminders<span class="badge-dot" id="remDot">0</span></div>
       <div class="sb-item" onclick="nav('whatsapp',this)"><i class="ti ti-brand-whatsapp"></i>WA Templates</div>
       <div class="sb-item" onclick="nav('search',this)"><i class="ti ti-search"></i>Search & Filter</div>
+      <div class="sb-item" onclick="nav('fhs-leads',this)"><i class="ti ti-chart-bar"></i>FHS Leads<span class="badge-dot" id="fhsLeadDot" style="display:none">0</span></div>
       <div class="sb-section">System</div>
       <div class="sb-item" onclick="nav('admin',this)"><i class="ti ti-settings"></i>Admin Panel</div>
     </nav>
@@ -716,6 +719,52 @@ tr:hover td{background:var(--bg4)}
         </div>
       </div>
 
+      <!-- FHS Leads Page -->
+      <div class="page" id="page-fhs-leads">
+        <div class="ph"><div><div class="ph-title">Financial Health Score Leads</div><div class="ph-sub">Customers who checked their score via your website tool</div></div><button class="btn btn-gold btn-sm" onclick="loadFHSLeads()"><i class="ti ti-refresh"></i>Refresh</button></div>
+        <div class="card" style="margin-bottom:16px">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <div style="background:var(--blue-bg);border-radius:10px;padding:12px 20px;text-align:center;min-width:100px">
+              <div style="font-size:24px;font-weight:700;color:var(--blue)" id="fhs-total-count">—</div>
+              <div style="font-size:11px;color:var(--ink3)">Total Leads</div>
+            </div>
+            <div style="background:var(--green-bg);border-radius:10px;padding:12px 20px;text-align:center;min-width:100px">
+              <div style="font-size:24px;font-weight:700;color:var(--green)" id="fhs-today-count">—</div>
+              <div style="font-size:11px;color:var(--ink3)">Today</div>
+            </div>
+            <div style="background:var(--amber-bg);border-radius:10px;padding:12px 20px;text-align:center;min-width:100px">
+              <div style="font-size:24px;font-weight:700;color:var(--amber)" id="fhs-avg-score">—</div>
+              <div style="font-size:11px;color:var(--ink3)">Avg Score</div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div id="fhs-leads-loading" style="text-align:center;padding:30px;color:var(--ink3)"><i class="ti ti-loader" style="font-size:24px;display:block;margin-bottom:8px;animation:spin 1s linear infinite"></i>Loading leads from cloud...</div>
+          <div id="fhs-leads-table" style="display:none;overflow-x:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:13px">
+              <thead><tr style="border-bottom:2px solid var(--border)">
+                <th style="text-align:left;padding:10px 8px;color:var(--ink3);font-weight:600;font-size:11px;text-transform:uppercase">Name</th>
+                <th style="text-align:left;padding:10px 8px;color:var(--ink3);font-weight:600;font-size:11px;text-transform:uppercase">Mobile</th>
+                <th style="text-align:left;padding:10px 8px;color:var(--ink3);font-weight:600;font-size:11px;text-transform:uppercase">Email</th>
+                <th style="text-align:left;padding:10px 8px;color:var(--ink3);font-weight:600;font-size:11px;text-transform:uppercase">Score</th>
+                <th style="text-align:left;padding:10px 8px;color:var(--ink3);font-weight:600;font-size:11px;text-transform:uppercase">Status</th>
+                <th style="text-align:left;padding:10px 8px;color:var(--ink3);font-weight:600;font-size:11px;text-transform:uppercase">Date</th>
+                <th style="text-align:left;padding:10px 8px;color:var(--ink3);font-weight:600;font-size:11px;text-transform:uppercase">Action</th>
+              </tr></thead>
+              <tbody id="fhs-leads-tbody"></tbody>
+            </table>
+          </div>
+          <div id="fhs-leads-empty" style="display:none;text-align:center;padding:40px;color:var(--ink3)">
+            <i class="ti ti-chart-bar" style="font-size:32px;display:block;margin-bottom:8px;opacity:.3"></i>
+            <p>No FHS leads yet. Share your website to get leads!</p>
+          </div>
+          <div id="fhs-leads-error" style="display:none;text-align:center;padding:30px;color:var(--red)">
+            <i class="ti ti-wifi-off" style="font-size:24px;display:block;margin-bottom:8px"></i>
+            <p id="fhs-error-msg">Could not load leads. Check internet connection.</p>
+          </div>
+        </div>
+      </div>
+
     </div><!-- /content -->
   </div><!-- /main -->
 </div><!-- /app -->
@@ -839,7 +888,7 @@ tr:hover td{background:var(--bg4)}
 // ============================================================
 let DB = {
   clients: [], insurance: [], investments: [], reminders: [],
-  family: {}, documents: {}, creds: {user:'admin', pass:'hills2024'}
+  family: {}, documents: {}, creds: {user:'admin', pass:'Hills1008'}
 };
 
 // ============================================================
@@ -847,11 +896,13 @@ let DB = {
 // ============================================================
 async function save(){
   try{
-    // Always save to localStorage as backup
-    localStorage.setItem('hfsCRM', JSON.stringify(DB));
+    // Save to localStorage (without sensitive creds)
+    const safeDB = {clients:DB.clients,insurance:DB.insurance,investments:DB.investments,reminders:DB.reminders,family:DB.family,documents:DB.documents};
+    localStorage.setItem('hfsCRM', JSON.stringify(safeDB));
     // Save to Firebase if ready
     if(window._firestore){
       const db = window._firestore;
+      // Save main CRM data
       const docRef = window._doc(db, 'crm_data', 'main');
       await window._setDoc(docRef, {
         clients: DB.clients,
@@ -860,6 +911,13 @@ async function save(){
         reminders: DB.reminders,
         family: DB.family,
         documents: DB.documents,
+        updatedAt: new Date().toISOString()
+      });
+      // Save credentials securely in separate Firestore doc
+      const credsRef = window._doc(db, 'crm_config', 'auth');
+      await window._setDoc(credsRef, {
+        user: DB.creds.user,
+        pass: DB.creds.pass,
         updatedAt: new Date().toISOString()
       });
     }
@@ -871,6 +929,7 @@ async function load(){
     // Try Firebase first
     if(window._firestore){
       const db = window._firestore;
+      // Load CRM data
       const docRef = window._doc(db, 'crm_data', 'main');
       const snap = await window._getDoc(docRef);
       if(snap.exists()){
@@ -881,11 +940,19 @@ async function load(){
         DB.reminders = data.reminders || [];
         DB.family = data.family || {};
         DB.documents = data.documents || {};
-        // Also update localStorage
-        localStorage.setItem('hfsCRM', JSON.stringify(DB));
-        console.log('✅ Data loaded from Firebase');
-        return;
       }
+      // Load credentials from Firebase (secure)
+      const credsRef = window._doc(db, 'crm_config', 'auth');
+      const credsSnap = await window._getDoc(credsRef);
+      if(credsSnap.exists()){
+        const cd = credsSnap.data();
+        DB.creds = {user: cd.user || 'admin', pass: cd.pass || DB.creds.pass};
+      }
+      // Sync to localStorage (without creds)
+      const safeDB = {clients:DB.clients,insurance:DB.insurance,investments:DB.investments,reminders:DB.reminders,family:DB.family,documents:DB.documents};
+      localStorage.setItem('hfsCRM', JSON.stringify(safeDB));
+      console.log('✅ Data loaded from Firebase');
+      return;
     }
     // Fallback to localStorage
     const d = localStorage.getItem('hfsCRM');
@@ -995,7 +1062,8 @@ function nav(page, el){
     'reminders':'Reminder <span>Center</span>',
     'whatsapp':'WhatsApp <span>Templates</span>',
     'search':'Search <span>& Filter</span>',
-    'admin':'Admin <span>Panel</span>'
+    'admin':'Admin <span>Panel</span>',
+    'fhs-leads':'FHS <span>Leads</span>'
   };
   document.getElementById('ttitle').innerHTML = titles[page] || page;
   closeSB();
@@ -1013,7 +1081,8 @@ function nav(page, el){
     'reminders': renderRem,
     'whatsapp': ()=>renderWA('birthday'),
     'search': ()=>renderSearchResults(DB.clients),
-    'admin': renderAdmin
+    'admin': renderAdmin,
+    'fhs-leads': loadFHSLeads
   };
   try {
     if(fn[page]) fn[page]();
@@ -1807,6 +1876,82 @@ function dlCSV(csv,fn){ const a=document.createElement('a'); a.href='data:text/c
 function clearAll(){ if(confirm('Delete ALL data? Cannot be undone!')){ DB.clients=[]; DB.insurance=[]; DB.investments=[]; DB.reminders=[]; DB.family={}; DB.documents={}; save(); renderAdmin(); renderDash(); populateDropdowns(); toast('All data cleared','error'); } }
 
 // ============================================================
+// FHS LEADS - Load from Firebase
+// ============================================================
+async function loadFHSLeads(){
+  const loadEl = document.getElementById('fhs-leads-loading');
+  const tableEl = document.getElementById('fhs-leads-table');
+  const emptyEl = document.getElementById('fhs-leads-empty');
+  const errorEl = document.getElementById('fhs-leads-error');
+  const tbody   = document.getElementById('fhs-leads-tbody');
+  // Reset UI
+  loadEl.style.display='block'; tableEl.style.display='none';
+  emptyEl.style.display='none'; errorEl.style.display='none';
+  try{
+    if(!window._firestore){ throw new Error('Firebase not ready — please wait a moment and try again'); }
+    const db = window._firestore;
+    const getDocs = window._getDocs;
+    const collection = window._col;
+    const orderBy = window._orderBy;
+    const query = window._query;
+    if(!getDocs||!orderBy||!query){ throw new Error('Firebase functions not loaded yet'); }
+    // Load leads
+    const leadsQ = query(collection(db,'fhs_leads'), orderBy('timestamp','desc'));
+    const leadsSnap = await getDocs(leadsQ);
+    // Load scores
+    const scoresQ = query(collection(db,'fhs_scores'), orderBy('timestamp','desc'));
+    const scoresSnap = await getDocs(scoresQ);
+    // Build score map by mobile
+    const scoreMap = {};
+    scoresSnap.forEach(doc=>{
+      const d = doc.data();
+      if(!scoreMap[d.mobile]) scoreMap[d.mobile] = {score: d.score, status: d.status};
+    });
+    // Build lead list
+    const leads = [];
+    leadsSnap.forEach(doc=>{ leads.push({id: doc.id, ...doc.data()}); });
+    // Stats
+    const today = new Date().toLocaleDateString('en-IN');
+    const todayCount = leads.filter(l=>l.date===today).length;
+    const scoredLeads = leads.filter(l=>scoreMap[l.mobile]&&scoreMap[l.mobile].score!=null);
+    const avgScore = scoredLeads.length ? Math.round(scoredLeads.reduce((s,l)=>s+(scoreMap[l.mobile].score||0),0)/scoredLeads.length) : '—';
+    document.getElementById('fhs-total-count').textContent = leads.length;
+    document.getElementById('fhs-today-count').textContent = todayCount;
+    document.getElementById('fhs-avg-score').textContent = avgScore;
+    // Update badge
+    const dot = document.getElementById('fhsLeadDot');
+    if(leads.length>0){ dot.style.display='inline-flex'; dot.textContent=leads.length; }
+    if(leads.length===0){ loadEl.style.display='none'; emptyEl.style.display='block'; return; }
+    // Render table
+    const scoreColor = {
+      'Excellent':'var(--green)','Good':'var(--green-mid)','Average':'var(--amber)',
+      'Poor':'var(--red)','Very Poor':'var(--red)'
+    };
+    tbody.innerHTML = leads.map(l=>{
+      const sc = scoreMap[l.mobile];
+      const scoreVal = sc ? sc.score+'/100' : '—';
+      const statusTxt = sc ? sc.status : 'Pending';
+      const col = scoreColor[statusTxt]||'var(--ink3)';
+      const waLink = `https://wa.me/91${l.mobile}?text=${encodeURIComponent('Namaste '+l.name+', Hills Financial Solutions se contact kar rahe hain. Aapka Financial Health Score dekha, aapki madad karna chahenge!')}`;
+      return `<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:10px 8px;font-weight:600">${l.name||'—'}</td>
+        <td style="padding:10px 8px"><a href="${waLink}" target="_blank" style="color:var(--blue);text-decoration:none">📱 ${l.mobile||'—'}</a></td>
+        <td style="padding:10px 8px;font-size:12px;color:var(--ink3)">${l.email||'—'}</td>
+        <td style="padding:10px 8px;font-weight:700;color:${col}">${scoreVal}</td>
+        <td style="padding:10px 8px"><span style="background:${col}20;color:${col};padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600">${statusTxt}</span></td>
+        <td style="padding:10px 8px;font-size:12px;color:var(--ink3)">${l.date||'—'}</td>
+        <td style="padding:10px 8px"><a href="${waLink}" target="_blank" class="btn btn-gold btn-sm" style="font-size:11px;padding:4px 10px">WhatsApp</a></td>
+      </tr>`;
+    }).join('');
+    loadEl.style.display='none'; tableEl.style.display='block';
+  } catch(e){
+    console.error('FHS Leads error:',e);
+    loadEl.style.display='none'; errorEl.style.display='block';
+    document.getElementById('fhs-error-msg').textContent = 'Error: '+e.message;
+  }
+}
+
+// ============================================================
 // DROPDOWNS & HELPERS
 // ============================================================
 function populateDropdowns(){
@@ -1858,6 +2003,28 @@ async function saveWithStatus(){
   await _origSave();
   showSyncStatus('ready');
 }
+
+// Pre-login: load credentials from Firebase before user attempts login
+(async function preLoadCreds(){
+  try{
+    await new Promise(resolve=>{
+      if(window._firestore){ resolve(); return; }
+      window.addEventListener('firebaseReady', resolve, {once:true});
+      setTimeout(resolve, 4000); // max wait 4s
+    });
+    if(window._firestore && window._getDoc && window._doc){
+      const db = window._firestore;
+      const credsRef = window._doc(db, 'crm_config', 'auth');
+      const snap = await window._getDoc(credsRef);
+      if(snap.exists()){
+        const cd = snap.data();
+        if(cd.user) DB.creds.user = cd.user;
+        if(cd.pass) DB.creds.pass = cd.pass;
+        console.log('✅ Login credentials loaded from Firebase');
+      }
+    }
+  } catch(e){ console.warn('Pre-login creds load failed, using default:', e); }
+})();
 </script>
 </body>
 </html>
