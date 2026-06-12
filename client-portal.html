@@ -385,7 +385,7 @@ async function sendOTP(){
 async function sendOTPEmail(email, name, otp){
   try{
     emailjs.init('SHSbyit8v68Fkg71c');
-    const result = await emailjs.send('service_86dnhtd', 'ueo310h', {
+    const result = await emailjs.send('service_86dnhtd', 'template_tfw02nx', {
       to_email: email,
       to_name: name || 'Client',
       otp_code: otp,
