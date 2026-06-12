@@ -609,7 +609,11 @@ tr:hover td{background:var(--bg4)}
               <div class="fg"><label>Upload Date</label><input type="date" id="newDocDate"></div>
               <div class="fg"><label>Expiry Date (if any)</label><input type="date" id="newDocExpiry"></div>
             </div>
-            <div class="upload-zone" onclick="uploadDoc()"><i class="ti ti-cloud-upload"></i><p>Click to Upload Document</p><p style="font-size:11px;margin-top:3px">PDF, JPG, PNG supported</p></div>
+            <input type="file" id="docFileInput" accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange="handleDocFileSelected(this)">
+            <div class="upload-zone" onclick="document.getElementById('docFileInput').click()"><i class="ti ti-cloud-upload"></i><p>Click to Upload Document</p><p style="font-size:11px;margin-top:3px">PDF, JPG, PNG supported</p><p id="docFileName" style="font-size:12px;margin-top:6px;color:var(--g4);font-weight:600;display:none"></p></div>
+            <div style="margin-top:12px;display:flex;justify-content:flex-end">
+              <button class="btn btn-gold" onclick="uploadDoc()"><i class="ti ti-device-floppy"></i>Save Document</button>
+            </div>
           </div>
         </div>
       </div>
@@ -1424,29 +1428,71 @@ function renderDocGrid(){
   if(docs.length===0){grid.innerHTML=`<div class="empty" style="grid-column:1/-1"><i class="ti ti-folder-open"></i><p>No documents uploaded</p></div>`;return;}
   grid.innerHTML = docs.map((d,i)=>{
     const info = DOC_INFO[d.type]||DOC_INFO.other;
+    const dlBtn = d.fileData ? `<a href="${d.fileData}" download="${d.fileName||d.name}" class="icon-btn" title="Download" style="display:inline-flex;align-items:center;justify-content:center;text-decoration:none"><i class="ti ti-download"></i></a>` : '';
+    const fileInfo = d.fileName ? `<div style="font-size:10px;color:var(--ink3);margin-bottom:5px">📎 ${d.fileName}${d.fileSize?' ('+d.fileSize+')':''}</div>` : '';
     return `<div class="doc-card">
       <div class="doc-ic" style="background:${info.bg};color:${info.c}"><i class="ti ${info.ic}"></i></div>
       <div class="doc-nm">${d.name||info.label}</div>
       <div class="doc-mt">Uploaded: ${d.date||'—'}<br>${d.expiry?'Expires: '+d.expiry:''}</div>
+      ${fileInfo}
       <div style="margin-bottom:8px"><span class="badge ${d.status==='Verified'?'bg-green':'bg-red'}">${d.status}</span></div>
       <div class="doc-acts">
         <button class="icon-btn gold" title="${d.status==='Verified'?'Mark Pending':'Verify'}" onclick="toggleDoc('${currentDocClient}',${i})">${d.status==='Verified'?'<i class="ti ti-x"></i>':'<i class="ti ti-check"></i>'}</button>
+        ${dlBtn}
         <button class="icon-btn red" title="Delete" onclick="deleteDoc('${currentDocClient}',${i})"><i class="ti ti-trash"></i></button>
       </div>
     </div>`;
   }).join('');
 }
 function showDocTab(tab,el){currentDocTab=tab;document.querySelectorAll('#docTabs .tab').forEach(t=>t.classList.remove('active'));el.classList.add('active');if(currentDocClient)renderDocGrid();}
+function handleDocFileSelected(input){
+  if(!input.files||!input.files[0]) return;
+  const file = input.files[0];
+  // Show file name in upload zone
+  const nameEl = document.getElementById('docFileName');
+  if(nameEl){ nameEl.textContent = '📎 '+file.name; nameEl.style.display='block'; }
+  // Auto-fill document name if empty
+  const nameInput = document.getElementById('newDocName');
+  if(nameInput && !nameInput.value){
+    nameInput.value = file.name.replace(/\.[^.]+$/,'');
+  }
+  // Store file reference for upload
+  window._pendingDocFile = file;
+}
 function uploadDoc(){
-  if(!currentDocClient){toast('Select a client first','error');return;}
+  if(!currentDocClient){toast('Pehle client select karein','error');return;}
   const type = document.getElementById('newDocType').value;
-  if(!type){toast('Select document type','error');return;}
+  if(!type){toast('Document type select karein','error');return;}
+  if(!window._pendingDocFile){toast('Pehle file choose karein (Click to Upload)','error');return;}
   const info = DOC_INFO[type];
   const name = document.getElementById('newDocName').value || info.label;
-  if(!DB.documents[currentDocClient]) DB.documents[currentDocClient]=[];
-  DB.documents[currentDocClient].push({id:'D'+Date.now(),type,name,date:document.getElementById('newDocDate').value,expiry:document.getElementById('newDocExpiry').value,status:'Pending'});
-  save(); renderDocGrid(); document.getElementById('newDocType').value=''; document.getElementById('newDocName').value=''; document.getElementById('newDocExpiry').value='';
-  toast('Document added! Status: Pending','success');
+  const file = window._pendingDocFile;
+  // Read file as base64 and save
+  const reader = new FileReader();
+  reader.onload = function(e){
+    if(!DB.documents[currentDocClient]) DB.documents[currentDocClient]=[];
+    DB.documents[currentDocClient].push({
+      id:'D'+Date.now(), type, name,
+      date: document.getElementById('newDocDate').value,
+      expiry: document.getElementById('newDocExpiry').value,
+      status:'Pending',
+      fileName: file.name,
+      fileSize: Math.round(file.size/1024)+'KB',
+      fileData: e.target.result
+    });
+    save(); renderDocGrid();
+    // Reset form
+    document.getElementById('newDocType').value='';
+    document.getElementById('newDocName').value='';
+    document.getElementById('newDocExpiry').value='';
+    document.getElementById('docFileInput').value='';
+    const nameEl = document.getElementById('docFileName');
+    if(nameEl){ nameEl.textContent=''; nameEl.style.display='none'; }
+    window._pendingDocFile = null;
+    toast('Document upload ho gaya! Status: Pending ✓','success');
+  };
+  reader.onerror = function(){ toast('File read mein error aaya, dobara try karein','error'); };
+  reader.readAsDataURL(file);
 }
 function toggleDoc(cid,i){ DB.documents[cid][i].status = DB.documents[cid][i].status==='Verified'?'Pending':'Verified'; save(); renderDocGrid(); toast('Status updated','success'); }
 function deleteDoc(cid,i){ if(confirm('Delete this document?')){ DB.documents[cid].splice(i,1); save(); renderDocGrid(); toast('Deleted','error'); } }
