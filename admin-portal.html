@@ -1467,32 +1467,26 @@ function uploadDoc(){
   const info = DOC_INFO[type];
   const name = document.getElementById('newDocName').value || info.label;
   const file = window._pendingDocFile;
-  // Read file as base64 and save
-  const reader = new FileReader();
-  reader.onload = function(e){
-    if(!DB.documents[currentDocClient]) DB.documents[currentDocClient]=[];
-    DB.documents[currentDocClient].push({
-      id:'D'+Date.now(), type, name,
-      date: document.getElementById('newDocDate').value,
-      expiry: document.getElementById('newDocExpiry').value,
-      status:'Pending',
-      fileName: file.name,
-      fileSize: Math.round(file.size/1024)+'KB',
-      fileData: e.target.result
-    });
-    save(); renderDocGrid();
-    // Reset form
-    document.getElementById('newDocType').value='';
-    document.getElementById('newDocName').value='';
-    document.getElementById('newDocExpiry').value='';
-    document.getElementById('docFileInput').value='';
-    const nameEl = document.getElementById('docFileName');
-    if(nameEl){ nameEl.textContent=''; nameEl.style.display='none'; }
-    window._pendingDocFile = null;
-    toast('Document upload ho gaya! Status: Pending ✓','success');
-  };
-  reader.onerror = function(){ toast('File read mein error aaya, dobara try karein','error'); };
-  reader.readAsDataURL(file);
+  if(!DB.documents[currentDocClient]) DB.documents[currentDocClient]=[];
+  // FIX: Sirf metadata save karo - fileData (base64) hataya gaya
+  // Firebase 1MB limit exceed hoti thi isliye document sync fail hota tha
+  DB.documents[currentDocClient].push({
+    id:'D'+Date.now(), type, name,
+    date: document.getElementById('newDocDate').value,
+    expiry: document.getElementById('newDocExpiry').value,
+    status:'Pending',
+    fileName: file.name,
+    fileSize: Math.round(file.size/1024)+'KB'
+  });
+  save(); renderDocGrid();
+  document.getElementById('newDocType').value='';
+  document.getElementById('newDocName').value='';
+  document.getElementById('newDocExpiry').value='';
+  document.getElementById('docFileInput').value='';
+  const nameEl = document.getElementById('docFileName');
+  if(nameEl){ nameEl.textContent=''; nameEl.style.display='none'; }
+  window._pendingDocFile = null;
+  toast('Document save ho gaya! Client portal mein dikhega ✓','success');
 }
 function toggleDoc(cid,i){ DB.documents[cid][i].status = DB.documents[cid][i].status==='Verified'?'Pending':'Verified'; save(); renderDocGrid(); toast('Status updated','success'); }
 function deleteDoc(cid,i){ if(confirm('Delete this document?')){ DB.documents[cid].splice(i,1); save(); renderDocGrid(); toast('Deleted','error'); } }
